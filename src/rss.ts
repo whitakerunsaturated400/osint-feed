@@ -1,56 +1,96 @@
 import RssParser from "rss-parser";
-import type { Article, RssSourceConfig } from "./types.js";
-import { hashUrl } from "./utils.js";
+import type { Article, HarvesterWarning, RssSourceConfig } from "./types.js";
+import { hashUrl, normalizeText } from "./utils.js";
 
-const parser = new RssParser({
-  timeout: 15_000,
-  headers: {
-    "User-Agent": "osint-feed/0.1 (+https://github.com/osint-feed)",
-    Accept: "application/rss+xml, application/xml, text/xml, */*",
-  },
-});
+const DEFAULT_UA = "osint-feed/0.1 (+https://github.com/osint-feed)";
 
-/**
- * Fetch and parse an RSS/Atom feed, returning normalized Article[].
- */
+const createRssParser = (): RssParser => new RssParser();
+
+interface FetchRssOptions {
+  readonly fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  readonly timeout?: number;
+  readonly maxItems?: number;
+  readonly onWarning?: (warning: HarvesterWarning) => void;
+}
+
 export const fetchRss = async (
   source: RssSourceConfig,
-  fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
+  options: FetchRssOptions = {},
 ): Promise<Article[]> => {
   const now = new Date();
+  const {
+    fetchFn = globalThis.fetch,
+    timeout = 15_000,
+    maxItems = Number.POSITIVE_INFINITY,
+    onWarning,
+  } = options;
 
-  if (fetchFn) {
-    // Use custom fetch — allows proxies, testing, etc.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
     const res = await fetchFn(source.url, {
       headers: {
-        "User-Agent": "osint-feed/0.1 (+https://github.com/osint-feed)",
+        "User-Agent": DEFAULT_UA,
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
+      signal: controller.signal,
     });
+
     if (!res.ok) {
       throw new Error(`RSS fetch failed for ${source.id}: HTTP ${res.status}`);
     }
-    const xml = await res.text();
-    const feed = await parser.parseString(xml);
-    return feedToArticles(feed, source, now);
-  }
 
-  const feed = await parser.parseURL(source.url);
-  return feedToArticles(feed, source, now);
+    const xml = await res.text();
+    const feed = await createRssParser().parseString(xml);
+    const totalItems = feed.items.length;
+    const articles = feedToArticles(feed, source, now, maxItems);
+
+    if (articles.length === 0) {
+      onWarning?.({
+        code: "empty-rss-result",
+        message: `RSS source '${source.id}' returned zero articles`,
+      });
+    }
+
+    if (articles.some((article) => article.publishedAt === null)) {
+      const missingDates = articles.filter((article) => article.publishedAt === null).length;
+      onWarning?.({
+        code: "missing-published-at",
+        message: `RSS source '${source.id}' returned articles without publication dates`,
+        details: { missingDates, totalArticles: articles.length },
+      });
+    }
+
+    if (Number.isFinite(maxItems) && totalItems > maxItems) {
+      onWarning?.({
+        code: "truncated-source",
+        message: `RSS source '${source.id}' was truncated to ${maxItems} articles`,
+        details: { maxItems, totalItems },
+      });
+    }
+
+    return articles;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 const feedToArticles = (
   feed: RssParser.Output<Record<string, unknown>>,
   source: RssSourceConfig,
   fetchedAt: Date,
+  maxItems: number,
 ): Article[] => {
   const articles: Article[] = [];
 
   for (const item of feed.items) {
+    if (articles.length >= maxItems) break;
+
     const url = item.link?.trim();
     if (!url) continue;
 
-    const title = item.title?.trim() ?? "";
+    const title = normalizeText(item.title ?? "");
     if (!title) continue;
 
     const content = item["content:encoded"] as string | undefined
@@ -74,8 +114,8 @@ const feedToArticles = (
       sourceId: source.id,
       url,
       title,
-      content: typeof content === "string" ? content : null,
-      summary: typeof summary === "string" ? summary : null,
+      content: typeof content === "string" ? normalizeText(content) : null,
+      summary: typeof summary === "string" ? normalizeText(summary) : null,
       publishedAt,
       hash: hashUrl(url),
       fetchedAt,

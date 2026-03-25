@@ -5,9 +5,6 @@ interface SchedulerEntry {
   timer: ReturnType<typeof setInterval>;
 }
 
-/**
- * Creates a scheduler that polls sources at their configured intervals.
- */
 export const createScheduler = (
   sources: readonly SourceConfig[],
   fetchSource: (source: SourceConfig) => Promise<Article[]>,
@@ -31,7 +28,6 @@ export const createScheduler = (
       }
     };
 
-    // Run immediately on start, then at intervals
     void tick();
 
     const timer = setInterval(() => void tick(), intervalMs);

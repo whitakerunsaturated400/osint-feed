@@ -26,7 +26,6 @@ export const dedup = (
     if (!isDuplicate) {
       kept.push({ ...article });
     } else {
-      // If the new article has more content, replace the existing one
       const existingIdx = kept.findIndex(
         (existing) => jaccardSimilarity(existing.title, article.title) >= threshold,
       );
@@ -101,7 +100,7 @@ const sortArticles = (
     return [...articles].sort((a, b) => {
       const dateA = a.publishedAt?.getTime() ?? a.fetchedAt.getTime();
       const dateB = b.publishedAt?.getTime() ?? b.fetchedAt.getTime();
-      return dateB - dateA; // newest first
+      return dateB - dateA;
     });
   }
   // "relevance" — for now same as recency; could weight by content length / source priority later
@@ -149,24 +148,18 @@ export const buildDigest = (
   const opts = { ...DEFAULT_DIGEST, ...options };
   const totalFetched = articles.length;
 
-  // 1. Dedup by title similarity
   let result = dedup(articles, opts.similarityThreshold);
   const afterDedup = result.length;
 
-  // 2. Sort
   result = sortArticles(result, opts.sort);
 
-  // 3. Tag budget
   result = applyTagBudget(result, opts.maxArticlesPerTag);
   const afterBudget = result.length;
 
-  // 4. Truncate content
   result = truncateArticles(result, opts.maxContentLength);
 
-  // 5. Token budget
   result = applyTokenBudget(result, opts.maxTokens);
 
-  // Estimate final tokens
   const estimatedTokens = result.reduce((sum, a) => {
     const text = [a.title, a.summary, a.content].filter(Boolean).join(" ");
     return sum + estimateTokens(text);

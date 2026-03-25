@@ -4,6 +4,8 @@ Config-driven news harvester for Node.js. Pulls articles from RSS feeds and HTML
 
 No AI inside. No opinions about your stack. Just articles in, structured data out.
 
+Use RSS when you have it. Use HTML selectors when you do not. Filtering for your specific topic belongs in the app that consumes this library.
+
 ## Why
 
 You're building something that needs fresh news context — a SITREP generator, a threat monitor, a research assistant. You have 30+ sources across languages and formats. You need the data compact enough to fit in a Llama/GPT context window without blowing the budget.
@@ -81,6 +83,8 @@ Works out of the box. No selectors needed — feeds are parsed automatically.
 
 You define CSS selectors per source. The library uses [cheerio](https://github.com/cheeriojs/cheerio) — no headless browser, no Puppeteer overhead.
 
+This is still config-driven scraping: the library does not auto-discover article lists or infer what is relevant to your use case.
+
 ```typescript
 {
   id: "defence24",
@@ -112,11 +116,16 @@ Creates a harvester instance. Options:
 | `digest` | `DigestOptions` | see below | Default digest settings |
 | `requestTimeout` | `number` | `15000` | HTTP timeout in ms |
 | `requestGap` | `number` | `1000` | Minimum ms between requests (rate limiting) |
+| `maxItemsPerSource` | `number` | `50` | Cap articles returned from one source |
 | `fetch` | `Function` | global fetch | Custom fetch for proxies/testing |
+| `onError` | `Function` | — | Callback for per-source fetch or parse errors |
+| `onWarning` | `Function` | — | Callback for non-fatal source diagnostics |
 
 ### `harvester.fetchAll()`
 
 Fetches all enabled sources. Returns `Article[]`.
+
+If one source fails, the method still returns articles from the remaining sources and reports the problem through `onError` when provided.
 
 ### `harvester.fetch(sourceId)`
 
@@ -131,7 +140,7 @@ Fetches sources matching any of the given tags.
 The main event. Fetches all sources, then runs the compression pipeline:
 
 1. **Dedup** — Groups similar headlines (Jaccard similarity) and keeps the richest version
-2. **Sort** — Newest first (or by relevance)
+2. **Sort** — Newest first
 3. **Tag budget** — Caps articles per tag so no single region dominates
 4. **Truncate** — Cuts content to N characters per article
 5. **Token budget** — Trims from the bottom until under the token limit
@@ -142,7 +151,7 @@ const { articles, stats } = await harvester.digest({
   maxArticlesPerTag: 10,       // max articles per tag group
   maxContentLength: 500,       // chars per article content
   similarityThreshold: 0.6,    // title dedup threshold (0-1)
-  sort: "recency",             // "recency" | "relevance"
+  sort: "recency",
 });
 
 // stats.totalFetched     → 700  (raw from all sources)
@@ -163,6 +172,9 @@ harvester.start({
   },
   onError: (err, source) => {
     console.error(`${source.name} failed:`, err);
+  },
+  onWarning: (warning, source) => {
+    console.warn(`${source.name}: ${warning.code} - ${warning.message}`);
   },
 });
 
@@ -203,6 +215,24 @@ const harvester = createHarvester({
 
 // fetchAll() now skips articles whose URL hash is already known
 ```
+
+## Diagnostics
+
+The library keeps the happy path simple: `fetchAll()` and `digest()` still return article data directly.
+
+Use `onError` and `onWarning` if you want visibility into partial failures or weak-quality source output.
+
+- `onError` covers hard failures like timeouts, HTTP errors, and parsing failures.
+- `onWarning` covers non-fatal issues like empty source results, missing publication dates, or per-source truncation.
+
+This matches the typical small-library OSS pattern: easy defaults, optional hooks for logging and monitoring.
+
+## Scope and Limits
+
+- RSS and HTML are first-class source types.
+- HTML works best when you can define stable list selectors.
+- The library does not execute page JavaScript or run a headless browser.
+- The library does not decide what is relevant for your domain; apply your own filters downstream.
 
 ## Use with Next.js
 

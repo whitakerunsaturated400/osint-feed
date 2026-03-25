@@ -1,14 +1,9 @@
 import { createHash } from "node:crypto";
 
-/**
- * SHA-256 hex hash of a string — used for article dedup by URL.
- */
+/** SHA-256 hex hash of a string. */
 export const hashUrl = (url: string): string =>
   createHash("sha256").update(url).digest("hex");
 
-/**
- * Tokenize a string into a set of lowercased words.
- */
 const tokenize = (text: string): Set<string> => {
   const words = text
     .toLowerCase()
@@ -44,6 +39,9 @@ export const jaccardSimilarity = (a: string, b: string): number => {
 export const estimateTokens = (text: string): number =>
   Math.ceil(text.length / 4);
 
+export const normalizeText = (text: string): string =>
+  text.replace(/\s+/g, " ").trim();
+
 /**
  * Truncate a string to maxLength characters, breaking at a word boundary.
  */
@@ -53,9 +51,6 @@ export const truncate = (text: string, maxLength: number): string => {
   return (cut > 0 ? text.slice(0, cut) : text.slice(0, maxLength)) + "...";
 };
 
-/**
- * Simple throttle queue — ensures minimum gap between async operations.
- */
 export class ThrottleQueue {
   private lastRun = 0;
 
@@ -72,9 +67,6 @@ export class ThrottleQueue {
   }
 }
 
-/**
- * Resolve a potentially relative URL against a base URL.
- */
 export const resolveUrl = (href: string, base: string): string => {
   try {
     return new URL(href, base).href;

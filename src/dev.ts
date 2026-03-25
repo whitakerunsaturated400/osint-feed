@@ -6,7 +6,6 @@ import { createHarvester } from "./index.js";
 import type { SourceConfig } from "./types.js";
 
 const sources: SourceConfig[] = [
-  // ── RSS sources ──────────────────────────────────────────
   {
     id: "bbc-world",
     name: "BBC World News",
@@ -87,49 +86,88 @@ const sources: SourceConfig[] = [
     tags: ["eu", "europe"],
     interval: 30,
   },
-
-  // ── HTML sources ─────────────────────────────────────────
-  {
-    id: "nato",
-    name: "NATO Newsroom",
-    type: "html",
-    url: "https://www.nato.int/cps/en/natohq/news.htm",
-    tags: ["nato", "alliance"],
-    interval: 30,
-    selectors: {
-      article: ".event-list-item",
-      title: "a span:first-child",
-      link: "a",
-      date: ".event-date",
-    },
-  },
-  {
-    id: "idf",
-    name: "IDF Press Releases",
-    type: "html",
-    url: "https://www.idf.il/en/mini-sites/press-releases/",
-    tags: ["middle-east", "israel", "military"],
-    interval: 30,
-    selectors: {
-      article: "[class*='articleCard']",
-      title: "h3, [class*='title']",
-      link: "a",
-      date: "[class*='date'], time",
-    },
-  },
+  // Sources moved from HTML to RSS after investigation
   {
     id: "defence24",
     name: "Defence24",
-    type: "html",
-    url: "https://defence24.pl/",
+    type: "rss",
+    url: "https://defence24.pl/rss",
     tags: ["poland", "defence"],
     interval: 15,
+  },
+  {
+    id: "uk-mod",
+    name: "UK Ministry of Defence",
+    type: "rss",
+    url: "https://www.gov.uk/government/organisations/ministry-of-defence.atom",
+    tags: ["uk", "military", "europe"],
+    interval: 30,
+  },
+  {
+    id: "ukrinform",
+    name: "Ukrinform Defence",
+    type: "rss",
+    url: "https://www.ukrinform.net/rss/rubric-ato",
+    tags: ["ukraine", "war"],
+    interval: 15,
+  },
+  {
+    id: "iran-intl",
+    name: "Iran International",
+    type: "rss",
+    url: "https://www.iranintl.com/feed",
+    tags: ["middle-east", "iran"],
+    interval: 15,
+  },
+  {
+    id: "usaf-rss",
+    name: "US Air Force News",
+    type: "rss",
+    url: "https://www.af.mil/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=1&max=20",
+    tags: ["us-military", "aviation"],
+    interval: 30,
+  },
+
+  {
+    id: "usaf",
+    name: "US Air Force News (HTML)",
+    type: "html",
+    url: "https://www.af.mil/News/",
+    tags: ["us-military", "aviation"],
+    interval: 30,
     selectors: {
-      article: "article, .article-item",
-      title: "h2 a, h3 a",
-      link: "h2 a, h3 a",
+      article: "article",
+      title: "h1 a",
+      link: "h1 a",
       date: "time",
-      summary: ".lead, .excerpt, p",
+      summary: "p",
+    },
+  },
+  {
+    id: "centcom",
+    name: "CENTCOM News",
+    type: "html",
+    url: "https://www.centcom.mil/MEDIA/NEWS-ARTICLES/",
+    tags: ["us-military", "middle-east"],
+    interval: 30,
+    selectors: {
+      article: ".da_related_item",
+      title: ".text a",
+      link: ".text a",
+    },
+  },
+  {
+    id: "eda",
+    name: "European Defence Agency",
+    type: "html",
+    url: "https://eda.europa.eu/news-and-events",
+    tags: ["eu", "defence", "europe"],
+    interval: 30,
+    selectors: {
+      article: "article.eda-card",
+      title: "h3",
+      link: "a.aLink",
+      date: "time",
     },
   },
 ];
@@ -143,6 +181,13 @@ const main = async (): Promise<void> => {
   const harvester = createHarvester({
     sources,
     requestGap: 1_500,
+    onError: (error, source) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`  ! Error [${source.id}] ${message}`);
+    },
+    onWarning: (warning, source) => {
+      console.log(`  ! Warning [${source.id}] ${warning.code}: ${warning.message}`);
+    },
     digest: {
       maxTokens: 8_000,
       maxArticlesPerTag: 8,
@@ -151,7 +196,6 @@ const main = async (): Promise<void> => {
     },
   });
 
-  // ── Test 1: fetchAll ──────────────────────────────────────
   console.log("[1/3] Fetching all sources...");
   const t0 = Date.now();
   const allArticles = await harvester.fetchAll();
@@ -159,7 +203,6 @@ const main = async (): Promise<void> => {
   console.log(`  Fetched ${allArticles.length} articles in ${fetchTime}s`);
   console.log();
 
-  // Print per-source breakdown
   const bySrc = new Map<string, number>();
   for (const a of allArticles) {
     bySrc.set(a.sourceId, (bySrc.get(a.sourceId) ?? 0) + 1);
@@ -172,13 +215,11 @@ const main = async (): Promise<void> => {
   }
   console.log();
 
-  // ── Test 2: fetchByTags ───────────────────────────────────
   console.log("[2/3] Fetching by tags: ['middle-east']...");
   const meArticles = await harvester.fetchByTags(["middle-east"]);
   console.log(`  Got ${meArticles.length} articles`);
   console.log();
 
-  // ── Test 3: digest ────────────────────────────────────────
   console.log("[3/3] Building LLM digest...");
   const { articles: digestArticles, stats } = await harvester.digest();
   console.log(`  Stats:`);
@@ -188,7 +229,6 @@ const main = async (): Promise<void> => {
   console.log(`    Estimated tokens: ${stats.estimatedTokens}`);
   console.log();
 
-  // Print digest articles
   console.log("  Digest articles:");
   console.log("  " + "-".repeat(56));
   for (const a of digestArticles.slice(0, 15)) {

@@ -71,14 +71,12 @@ describe("truncate", () => {
 
   it("truncates at word boundary", () => {
     const result = truncate("hello beautiful world", 15);
-    // "hello beautiful" is 15 chars, fits; word boundary cut at last space before limit
     expect(result).toBe("hello beautiful...");
   });
 
   it("adds ellipsis", () => {
     const result = truncate("a".repeat(200), 50);
     expect(result).toContain("...");
-    // The base part before "..." should be <= 50
     expect(result.length).toBeLessThanOrEqual(53); // 50 + "..."
   });
 });

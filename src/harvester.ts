@@ -4,6 +4,7 @@ import type {
   DigestResult,
   Harvester,
   HarvesterOptions,
+  HarvesterWarning,
   SchedulerCallbacks,
   SourceConfig,
 } from "./types.js";
@@ -13,26 +14,42 @@ import { buildDigest } from "./digest.js";
 import { createScheduler } from "./scheduler.js";
 import { ThrottleQueue } from "./utils.js";
 
-/**
- * Fetch articles from a single source (RSS or HTML).
- */
+type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 const fetchSource = async (
   source: SourceConfig,
   throttle: ThrottleQueue,
-  fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
-  timeout?: number,
+  options: {
+    readonly fetchFn?: FetchFn;
+    readonly timeout?: number;
+    readonly maxItemsPerSource?: number;
+    readonly onWarning?: (warning: HarvesterWarning, source: SourceConfig) => void;
+  } = {},
 ): Promise<Article[]> => {
   return throttle.run(async () => {
     if (source.type === "rss") {
-      return fetchRss(source, fetchFn);
+      const rssOptions: Parameters<typeof fetchRss>[1] = {
+        ...(options.fetchFn ? { fetchFn: options.fetchFn } : {}),
+        ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+        ...(options.maxItemsPerSource !== undefined ? { maxItems: options.maxItemsPerSource } : {}),
+        ...(options.onWarning
+          ? { onWarning: (warning: HarvesterWarning) => options.onWarning?.(warning, source) }
+          : {}),
+      };
+      return fetchRss(source, rssOptions);
     }
-    return fetchHtml(source, fetchFn ?? globalThis.fetch, timeout);
+    const htmlOptions: Parameters<typeof fetchHtml>[1] = {
+      ...(options.fetchFn ? { fetchFn: options.fetchFn } : {}),
+      ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+      ...(options.maxItemsPerSource !== undefined ? { maxItems: options.maxItemsPerSource } : {}),
+      ...(options.onWarning
+        ? { onWarning: (warning: HarvesterWarning) => options.onWarning?.(warning, source) }
+        : {}),
+    };
+    return fetchHtml(source, htmlOptions);
   });
 };
 
-/**
- * Filter out articles whose hashes are already known.
- */
 const filterKnown = async (
   articles: Article[],
   knownFn?: () => Promise<readonly string[]> | readonly string[],
@@ -42,9 +59,6 @@ const filterKnown = async (
   return articles.filter((a) => !known.has(a.hash));
 };
 
-/**
- * Create a configured harvester instance.
- */
 export const createHarvester = (options: HarvesterOptions): Harvester => {
   const {
     sources,
@@ -52,6 +66,9 @@ export const createHarvester = (options: HarvesterOptions): Harvester => {
     digest: defaultDigestOpts,
     requestTimeout = 15_000,
     requestGap = 1_000,
+    maxItemsPerSource = 50,
+    onError,
+    onWarning,
   } = options;
 
   const fetchFn = options.fetch;
@@ -63,7 +80,13 @@ export const createHarvester = (options: HarvesterOptions): Harvester => {
     sources.filter((s) => s.enabled !== false);
 
   const fetchSingle = async (source: SourceConfig): Promise<Article[]> => {
-    const articles = await fetchSource(source, throttle, fetchFn, requestTimeout);
+    const fetchOptions: Parameters<typeof fetchSource>[2] = {
+      timeout: requestTimeout,
+      maxItemsPerSource,
+      ...(fetchFn ? { fetchFn } : {}),
+      ...(onWarning ? { onWarning } : {}),
+    };
+    const articles = await fetchSource(source, throttle, fetchOptions);
     return filterKnown(articles, dedupOpts?.known);
   };
 
@@ -73,8 +96,8 @@ export const createHarvester = (options: HarvesterOptions): Harvester => {
       try {
         const articles = await fetchSingle(source);
         results.push(...articles);
-      } catch {
-        // Silently skip failed sources — consumer can use scheduler's onError for logging
+      } catch (error) {
+        onError?.(error, source);
       }
     }
     return results;
@@ -115,10 +138,15 @@ export const createHarvester = (options: HarvesterOptions): Harvester => {
       if (scheduler) {
         scheduler.stop();
       }
+      const schedulerCallbacks: SchedulerCallbacks = {
+        onArticles: callbacks.onArticles,
+        ...(callbacks.onError ?? onError ? { onError: callbacks.onError ?? onError } : {}),
+        ...(callbacks.onWarning ?? onWarning ? { onWarning: callbacks.onWarning ?? onWarning } : {}),
+      };
       scheduler = createScheduler(
         getEnabledSources(),
         (source) => fetchSingle(source),
-        callbacks,
+        schedulerCallbacks,
       );
     },
 

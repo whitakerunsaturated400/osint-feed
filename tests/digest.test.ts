@@ -87,7 +87,6 @@ describe("buildDigest", () => {
   });
 
   it("respects maxTokens budget", () => {
-    // Each article ~100 chars = ~25 tokens. 50 articles = ~1250 tokens.
     const articles = Array.from({ length: 50 }, (_, i) =>
       makeArticle({
         title: `Unique headline number ${i} about something`,

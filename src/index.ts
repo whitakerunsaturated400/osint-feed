@@ -11,6 +11,8 @@ export type {
   HarvesterOptions,
   HtmlSelectors,
   HtmlSourceConfig,
+  HarvesterWarning,
+  HarvesterWarningCode,
   KnownHashesFn,
   RssSourceConfig,
   SchedulerCallbacks,
