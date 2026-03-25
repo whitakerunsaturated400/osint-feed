@@ -1,0 +1,49 @@
+{
+  "name": "osint-feed",
+  "version": "0.1.0",
+  "description": "Config-driven news harvester for OSINT. RSS + HTML scraping with built-in dedup and LLM-ready digest.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/dev.ts"
+  },
+  "keywords": [
+    "osint",
+    "rss",
+    "scraper",
+    "news",
+    "feed",
+    "harvester",
+    "llm",
+    "digest"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "tsx": "^4.0.0"
+  }
+}
