@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dev": "tsx src/dev.ts"
+    "dev": "tsx src/dev.ts",
+    "lint": "eslint . --ext .ts,.tsx"
   },
   "keywords": [
     "osint",
@@ -42,9 +43,12 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "eslint": "^9.39.4",
+    "globals": "^17.4.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0",
-    "tsx": "^4.0.0"
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^2.0.0"
   }
 }
